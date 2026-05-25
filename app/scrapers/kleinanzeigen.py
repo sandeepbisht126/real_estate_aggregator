@@ -12,7 +12,7 @@ class KleinanzeigenScraper:
 
     BASE_URL = "https://www.kleinanzeigen.de"
 
-    async def search(self, filters, max_pages=3):
+    async def search(self, filters, max_pages=5):
 
         all_results = []
 
@@ -62,6 +62,7 @@ class KleinanzeigenScraper:
                     f"https://www.kleinanzeigen.de/"
                     f"s-wohnung-kaufen/"
                     f"berlin/"
+                    f"sortierung:neuste/"
                     f"preis:{filters.min_price}:{filters.max_price}/"
                     f"seite:{page_num}/"
                     f"c196l3331+"
@@ -160,7 +161,9 @@ class KleinanzeigenScraper:
 
                     for selector in selectors:
 
-                        ads = soup.select(selector)
+                        ads = soup.select(
+                            "article.aditem"
+                        )
 
                         if len(ads) > 0:
 
@@ -176,15 +179,26 @@ class KleinanzeigenScraper:
 
                     if len(ads) == 0:
 
-                        with open(
-                            f"debug_page_{page_num}.html",
-                            "w",
-                            encoding="utf-8"
-                        ) as f:
+                        empty_page_count += 1
 
-                            f.write(content)
+                        print(
+                            f"Empty page detected ({empty_page_count})"
+                        )
+
+                        # retry once
+                        await asyncio.sleep(
+                            random.uniform(10, 20)
+                        )
 
                         continue
+
+                    else:
+
+                        empty_page_count = 0
+
+                    if empty_page_count >= 3:
+                        print("Stopping due to repeated empty pages")
+                        break
 
                     # Extract links
 

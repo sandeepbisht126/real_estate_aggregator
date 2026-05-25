@@ -1,0 +1,10 @@
+streamlit
+sqlalchemy
+psycopg2-binary
+playwright
+beautifulsoup4
+lxml
+pandas
+pydantic
+httpx
+asyncio

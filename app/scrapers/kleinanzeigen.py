@@ -20,9 +20,9 @@ INVESTMENT_KEYWORDS = [
 class KleinanzeigenScraper:
     BASE_URL = "https://www.kleinanzeigen.de"
 
-    def is_investment_property(self, text):
+    def is_investment_property(self, text, title):
 
-        text = text.lower()
+        text = text.lower() + title.lower()
 
         return any(
             keyword in text
@@ -393,7 +393,7 @@ class KleinanzeigenScraper:
                 strip=True
             )
 
-            if self.is_investment_property(text):
+            if self.is_investment_property(text, title):
                 return None
 
             # DETAILS

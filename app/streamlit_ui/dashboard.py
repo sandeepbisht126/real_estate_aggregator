@@ -267,6 +267,17 @@ with st.sidebar.form("filters_form"):
         value=120
     )
 
+    property_type = st.sidebar.multiselect(
+        "Property Type",
+        ["Apartment", "House"],
+        default=["Apartment", "House"]
+    )
+
+    max_hausgeld = st.sidebar.number_input(
+        "Max Hausgeld",
+        value=400
+    )
+
     balcony_only = st.checkbox(
         "Balcony Only"
     )
@@ -286,7 +297,7 @@ with st.sidebar.form("filters_form"):
 
     apply_filters = st.form_submit_button(
         "🚀 Apply Filters",
-        use_container_width=True
+        use_container_width=False
     )
 
 # -------------------------
@@ -306,6 +317,8 @@ if apply_filters:
         AND living_space BETWEEN :min_space AND :max_space
 
         AND area ILIKE :area
+        
+        AND hausgeld <= :max_hausgeld
     """
 
     # Balcony filter
@@ -355,7 +368,6 @@ if apply_filters:
         """
 
     # Sorting
-
     query += """
     ORDER BY posted_date DESC NULLS LAST
     """
@@ -367,7 +379,8 @@ if apply_filters:
         "max_rooms": max_rooms,
         "min_space": min_space,
         "max_space": max_space,
-        "area": f"%{area}%"
+        "area": f"%{area}%",
+        "max_hausgeld": max_hausgeld
     }
 
     df = pd.read_sql(

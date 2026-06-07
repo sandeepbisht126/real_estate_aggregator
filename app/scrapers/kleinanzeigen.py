@@ -18,6 +18,7 @@ INVESTMENT_KEYWORDS = [
 
 
 class KleinanzeigenScraper:
+    BASE_URL = "https://www.kleinanzeigen.de"
 
     def is_investment_property(self, text):
 
@@ -28,7 +29,51 @@ class KleinanzeigenScraper:
             for keyword in INVESTMENT_KEYWORDS
         )
 
-    BASE_URL = "https://www.kleinanzeigen.de"
+    def normalize_property_type(self, property_type):
+
+        if not property_type:
+            return ""
+
+        p = property_type.lower()
+
+        mapping = {
+
+            # Apartments
+            "etagenwohnung": "Apartment",
+            "erdgeschosswohnung": "Ground Floor Apartment",
+            "dachgeschosswohnung": "Top Floor Apartment",
+            "maisonette": "Maisonette Apartment",
+            "penthouse": "Penthouse",
+            "souterrainwohnung": "Basement Apartment",
+            "loft": "Loft",
+            "studio": "Studio Apartment",
+
+            # Houses
+            "einfamilienhaus": "Detached House",
+            "mehrfamilienhaus": "Multi-family House",
+            "reihenhaus": "Terraced House",
+            "reihenendhaus": "End-of-Terrace House",
+            "doppelhaushälfte": "Semi-detached House",
+            "villa": "Villa",
+            "bungalow": "Bungalow",
+
+            # Special
+            "bauernhaus": "Farmhouse",
+            "landhaus": "Country House",
+            "schloss": "Castle",
+            "ferienhaus": "Holiday House",
+
+            # Generic
+            "haus": "House",
+            "wohnung": "Apartment"
+        }
+
+        for german, english in mapping.items():
+
+            if german in p:
+                return english
+
+        return property_type
 
     async def search(self, filters, max_pages=5):
 
@@ -81,13 +126,13 @@ class KleinanzeigenScraper:
                     f"s-wohnung-kaufen/"
                     f"berlin/"
                     f"sortierung:neuste/"
-                    f"preis:{filters.min_price}:{filters.max_price}/"
+                    f"preis:{filters['min_price']}:{filters['max_price']}/"
                     f"seite:{page_num}/"
                     f"c196l3331+"
                     f"wohnung_kaufen.qm_d:"
-                    f"{filters.min_space}%2C{filters.max_space}+"
+                    f"{filters['min_space']}%2C{filters['max_space']}+"
                     f"wohnung_kaufen.zimmer_d:"
-                    f"{filters.min_rooms}%2C{filters.max_rooms}"
+                    f"{filters['min_rooms']}%2C{filters['max_rooms']}"
                 )
 
                 print(f"\nOpening: {url}")
@@ -578,9 +623,8 @@ class KleinanzeigenScraper:
                     "floor"
                 ),
 
-                "property_type": details.get(
-                    "property_type"
-                ),
+                "property_type": self.normalize_property_type(details.get("property_type")
+                                                              ),
 
                 "year_built": details.get(
                     "year_built"

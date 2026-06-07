@@ -1,8 +1,8 @@
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 
-class ImmoScoutScraper:
 
+class ImmoScoutScraper:
     BASE_URL = "https://www.immobilienscout24.de"
 
     async def search(self, filters):

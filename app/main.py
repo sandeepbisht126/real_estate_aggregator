@@ -81,7 +81,7 @@ async def run():
 
             floor=item.get("floor"),
 
-            property_type=item.get("property_type"),
+            property_type=normalize_property_type(item.get("property_type")),
 
             year_built=item.get("year_built"),
 
@@ -105,6 +105,16 @@ async def run():
     session.close()
 
     print(f"Inserted {len(all_properties)} properties")
+
+
+def normalize_property_type(value):
+
+    value = value.lower()
+
+    if "haus" in value:
+        return "House"
+
+    return "Apartment"
 
 
 if __name__ == "__main__":

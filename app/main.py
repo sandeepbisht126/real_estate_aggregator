@@ -8,7 +8,6 @@ from models import Property
 from scrapers.kleinanzeigen import KleinanzeigenScraper
 from scrapers.immobilienscout import ImmoScoutScraper
 
-
 DATABASE_URL = (
     "postgresql://postgres:postgres@localhost:5432/properties"
 )
@@ -27,13 +26,13 @@ class Filters:
     min_rooms = 3
     max_rooms = 5
 
-async def run():
 
+async def run(max_scan_pages):
     klein = KleinanzeigenScraper()
     # immo = ImmoScoutScraper()
 
     results = await asyncio.gather(
-        klein.search(Filters()),
+        klein.search(Filters(), max_scan_pages),
         # immo.search(Filters())
     )
 
@@ -108,7 +107,6 @@ async def run():
 
 
 def normalize_property_type(value):
-
     value = value.lower()
 
     if "haus" in value:
@@ -118,4 +116,4 @@ def normalize_property_type(value):
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    asyncio.run(run(max_scan_pages=5))

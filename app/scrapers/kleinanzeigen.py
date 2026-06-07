@@ -75,7 +75,7 @@ class KleinanzeigenScraper:
 
         return property_type
 
-    async def search(self, filters, max_pages=5):
+    async def search(self, filters, max_pages):
 
         all_results = []
 
@@ -126,13 +126,13 @@ class KleinanzeigenScraper:
                     f"s-wohnung-kaufen/"
                     f"berlin/"
                     f"sortierung:neuste/"
-                    f"preis:{filters['min_price']}:{filters['max_price']}/"
+                    f"preis:{filters.min_price}:{filters.max_price}/"
                     f"seite:{page_num}/"
                     f"c196l3331+"
                     f"wohnung_kaufen.qm_d:"
-                    f"{filters['min_space']}%2C{filters['max_space']}+"
+                    f"{filters.min_space}%2C{filters.max_space}+"
                     f"wohnung_kaufen.zimmer_d:"
-                    f"{filters['min_rooms']}%2C{filters['max_rooms']}"
+                    f"{filters.min_rooms}%2C{filters.max_rooms}"
                 )
 
                 print(f"\nOpening: {url}")

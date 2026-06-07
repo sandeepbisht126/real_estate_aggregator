@@ -267,13 +267,13 @@ with st.sidebar.form("filters_form"):
         value=120
     )
 
-    property_type = st.sidebar.multiselect(
+    property_type = st.multiselect(
         "Property Type",
         ["Apartment", "House"],
         default=["Apartment", "House"]
     )
 
-    max_hausgeld = st.sidebar.number_input(
+    max_hausgeld = st.number_input(
         "Max Hausgeld",
         value=400
     )
@@ -297,7 +297,7 @@ with st.sidebar.form("filters_form"):
 
     apply_filters = st.form_submit_button(
         "🚀 Apply Filters",
-        use_container_width=False
+        use_container_width=True
     )
 
 # -------------------------

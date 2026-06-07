@@ -1,12 +1,11 @@
 import asyncio
 
 from sqlalchemy import create_engine
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from models import Property
-
 from scrapers.kleinanzeigen import KleinanzeigenScraper
-from scrapers.immobilienscout import ImmoScoutScraper
 
 DATABASE_URL = (
     "postgresql://postgres:postgres@localhost:5432/properties"
@@ -42,6 +41,7 @@ async def run(max_scan_pages):
         all_properties.extend(r)
 
     session = Session()
+    session.execute(text("TRUNCATE TABLE properties RESTART IDENTITY"))
 
     for item in all_properties:
 

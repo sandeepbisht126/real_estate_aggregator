@@ -7,8 +7,26 @@ from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
 
+INVESTMENT_KEYWORDS = [
+    "kapitalanlage",
+    "rendite",
+    "anlageobjekt",
+    "investment",
+    "anlegerwohnung",
+    "vermietete wohnung"
+]
+
 
 class KleinanzeigenScraper:
+
+    def is_investment_property(self, text):
+
+        text = text.lower()
+
+        return any(
+            keyword in text
+            for keyword in INVESTMENT_KEYWORDS
+        )
 
     BASE_URL = "https://www.kleinanzeigen.de"
 
@@ -19,7 +37,7 @@ class KleinanzeigenScraper:
         async with async_playwright() as p:
 
             browser = await p.chromium.launch(
-                headless=False,
+                headless=True,
                 args=[
                     "--disable-blink-features=AutomationControlled"
                 ]
@@ -46,7 +64,7 @@ class KleinanzeigenScraper:
                 lambda route:
                 route.abort()
                 if route.request.resource_type
-                in ["image", "media", "font"]
+                   in ["image", "media", "font"]
                 else route.continue_()
             )
 
@@ -134,11 +152,10 @@ class KleinanzeigenScraper:
                     # Bot detection
 
                     if (
-                        "access denied" in content.lower()
-                        or "verify you are human"
-                        in content.lower()
+                            "access denied" in content.lower()
+                            or "verify you are human"
+                            in content.lower()
                     ):
-
                         print(
                             "Bot protection detected"
                         )
@@ -166,7 +183,6 @@ class KleinanzeigenScraper:
                         )
 
                         if len(ads) > 0:
-
                             print(
                                 f"Using selector: {selector}"
                             )
@@ -219,10 +235,9 @@ class KleinanzeigenScraper:
                                 continue
 
                             if not href.startswith("http"):
-
                                 href = (
-                                    self.BASE_URL
-                                    + href
+                                        self.BASE_URL
+                                        + href
                                 )
 
                             links.append(href)
@@ -250,7 +265,6 @@ class KleinanzeigenScraper:
                             )
 
                             if result:
-
                                 all_results.append(
                                     result
                                 )
@@ -282,9 +296,9 @@ class KleinanzeigenScraper:
         return all_results
 
     async def parse_listing(
-        self,
-        page,
-        url
+            self,
+            page,
+            url
     ):
 
         try:
@@ -333,6 +347,9 @@ class KleinanzeigenScraper:
                 " ",
                 strip=True
             )
+
+            if self.is_investment_property(text):
+                return None
 
             # DETAILS
 
@@ -628,7 +645,6 @@ class KleinanzeigenScraper:
         )
 
         if match:
-
             return float(
                 match.group(1)
                 .replace(",", ".")
@@ -644,7 +660,6 @@ class KleinanzeigenScraper:
         )
 
         if match:
-
             return float(
                 match.group(1)
                 .replace(".", "")
@@ -653,14 +668,13 @@ class KleinanzeigenScraper:
         return None
 
     def extract_text_after_label(
-        self,
-        text
+            self,
+            text
     ):
 
         parts = text.split(" ")
 
         if len(parts) > 1:
-
             return " ".join(parts[1:])
 
         return text
@@ -681,8 +695,8 @@ class KleinanzeigenScraper:
         )
 
     def extract_energy_class(
-        self,
-        text
+            self,
+            text
     ):
 
         match = re.search(
@@ -691,14 +705,13 @@ class KleinanzeigenScraper:
         )
 
         if match:
-
             return match.group(1)
 
         return None
 
     def extract_city(
-        self,
-        text
+            self,
+            text
     ):
 
         berlin_areas = [
@@ -715,7 +728,6 @@ class KleinanzeigenScraper:
         for area in berlin_areas:
 
             if area.lower() in text.lower():
-
                 return area
 
         return "Berlin"

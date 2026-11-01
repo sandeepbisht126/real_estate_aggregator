@@ -119,6 +119,8 @@ class KleinanzeigenScraper:
 
             await stealth.apply_stealth_async(page)
 
+            empty_page_count = 0
+
             for page_num in range(1, max_pages + 1):
 
                 url = (
@@ -223,9 +225,7 @@ class KleinanzeigenScraper:
 
                     for selector in selectors:
 
-                        ads = soup.select(
-                            "article.aditem"
-                        )
+                        ads = soup.select(selector)
 
                         if len(ads) > 0:
                             print(

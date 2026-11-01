@@ -1,6 +1,13 @@
 import streamlit as st
 import pandas as pd
+import asyncio
+import sys
+import os
 from sqlalchemy import create_engine, text
+
+# Add parent directory to path to import main module
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from main import run
 
 # -------------------------
 # DATABASE
@@ -295,6 +302,12 @@ with st.sidebar.form("filters_form"):
         ]
     )
 
+    use_fast_scrape = st.checkbox(
+        "🔄 Fast Scrape (Latest 10 Properties)",
+        value=False,
+        help="Scrape latest 10 properties directly without database"
+    )
+
     apply_filters = st.form_submit_button(
         "🚀 Apply Filters",
         use_container_width=True
@@ -305,95 +318,163 @@ with st.sidebar.form("filters_form"):
 # -------------------------
 
 if apply_filters:
-
-    query = """
-    SELECT *
-    FROM properties
-    WHERE
-        price BETWEEN :min_price AND :max_price
-
-        AND rooms BETWEEN :min_rooms AND :max_rooms
-
-        AND living_space BETWEEN :min_space AND :max_space
-
-        AND area ILIKE :area
+    
+    # Fast scrape mode
+    if use_fast_scrape:
+        # Create progress bar and status placeholder
+        progress_bar = st.progress(0)
+        status_text = st.empty()
         
-        AND hausgeld <= :max_hausgeld
-    """
+        def progress_callback(progress, message):
+            """Callback to update Streamlit progress"""
+            progress_bar.progress(progress)
+            status_text.text(message)
+        
+        try:
+            # Run fast scrape with progress callback and filters
+            properties = asyncio.run(
+                run(
+                    max_scan_pages=2,
+                    use_database=False,
+                    max_results=10,
+                    fast_mode=True,
+                    progress_callback=progress_callback,
+                    filters={
+                        'min_price': min_price,
+                        'max_price': max_price,
+                        'min_rooms': min_rooms,
+                        'max_rooms': max_rooms,
+                        'min_space': min_space,
+                        'max_space': max_space
+                    }
+                )
+            )
+            
+            # Clear progress indicators
+            progress_bar.empty()
+            status_text.empty()
+            
+            if properties:
+                df = pd.DataFrame(properties)
+                st.success(f"✅ Scraped {len(df)} latest properties!")
+            else:
+                st.warning("No properties found in fast scrape.")
+                df = pd.DataFrame()
+        except Exception as e:
+            progress_bar.empty()
+            status_text.empty()
+            st.error(f"Error during fast scrape: {e}")
+            df = pd.DataFrame()
+    else:
+        # Database mode
+        query = """
+        SELECT *
+        FROM properties
+        WHERE
+            price BETWEEN :min_price AND :max_price
 
-    # Balcony filter
+            AND rooms BETWEEN :min_rooms AND :max_rooms
 
-    if balcony_only:
+            AND living_space BETWEEN :min_space AND :max_space
 
-        query += """
-        AND balcony = TRUE
+            AND area ILIKE :area
+            
+            AND hausgeld <= :max_hausgeld
         """
 
-    # Posted date filter
+        # Balcony filter
 
-    if posted_filter == "Last 24 Hours":
+        if balcony_only:
 
+            query += """
+            AND balcony = TRUE
+            """
+
+        # Posted date filter
+
+        if posted_filter == "Last 24 Hours":
+
+            query += """
+            AND posted_date >= NOW() - INTERVAL '24 HOURS'
+            """
+
+        elif posted_filter == "Last 48 Hours":
+
+            query += """
+            AND posted_date >= NOW() - INTERVAL '48 HOURS'
+            """
+
+        elif posted_filter == "Last 72 Hours":
+
+            query += """
+            AND posted_date >= NOW() - INTERVAL '72 HOURS'
+            """
+
+        elif posted_filter == "Last 7 Days":
+
+            query += """
+            AND posted_date >= NOW() - INTERVAL '7 DAYS'
+            """
+
+        elif posted_filter == "Last 14 Days":
+
+            query += """
+            AND posted_date >= NOW() - INTERVAL '14 DAYS'
+            """
+
+        elif posted_filter == "Last 30 Days":
+
+            query += """
+            AND posted_date >= NOW() - INTERVAL '30 DAYS'
+            """
+
+        # Sorting
         query += """
-        AND posted_date >= NOW() - INTERVAL '24 HOURS'
+        ORDER BY posted_date DESC NULLS LAST
         """
 
-    elif posted_filter == "Last 48 Hours":
+        params = {
+            "min_price": min_price,
+            "max_price": max_price,
+            "min_rooms": min_rooms,
+            "max_rooms": max_rooms,
+            "min_space": min_space,
+            "max_space": max_space,
+            "area": f"%{area}%",
+            "max_hausgeld": max_hausgeld
+        }
 
-        query += """
-        AND posted_date >= NOW() - INTERVAL '48 HOURS'
-        """
-
-    elif posted_filter == "Last 72 Hours":
-
-        query += """
-        AND posted_date >= NOW() - INTERVAL '72 HOURS'
-        """
-
-    elif posted_filter == "Last 7 Days":
-
-        query += """
-        AND posted_date >= NOW() - INTERVAL '7 DAYS'
-        """
-
-    elif posted_filter == "Last 14 Days":
-
-        query += """
-        AND posted_date >= NOW() - INTERVAL '14 DAYS'
-        """
-
-    elif posted_filter == "Last 30 Days":
-
-        query += """
-        AND posted_date >= NOW() - INTERVAL '30 DAYS'
-        """
-
-    # Sorting
-    query += """
-    ORDER BY posted_date DESC NULLS LAST
-    """
-
-    params = {
-        "min_price": min_price,
-        "max_price": max_price,
-        "min_rooms": min_rooms,
-        "max_rooms": max_rooms,
-        "min_space": min_space,
-        "max_space": max_space,
-        "area": f"%{area}%",
-        "max_hausgeld": max_hausgeld
-    }
-
-    df = pd.read_sql(
-        text(query),
-        engine,
-        params=params
-    )
+        df = pd.read_sql(
+            text(query),
+            engine,
+            params=params
+        )
 
     # -------------------------
     # CLEAN DATA
     # -------------------------
 
-    df = df.fillna("")
+    if not df.empty:
+        df = df.fillna("")
+        
+        # Apply additional filters for fast scrape mode
+        # (scraper already uses price/rooms/space filters, but we still filter by hausgeld, balcony, area)
+        if use_fast_scrape:
+            # Filter by hausgeld
+            df = df[df["hausgeld"].astype(float) <= max_hausgeld]
+            
+            # Filter by area
+            if area:
+                df = df[df["area"].astype(str).str.lower().str.contains(area.lower(), na=False)]
+            
+            # Filter by balcony
+            if balcony_only:
+                df = df[df["balcony"] == True]
+            
+            # Sort by posted date
+            df = df.sort_values(by="posted_date", ascending=False)
+    else:
+        df = pd.DataFrame()
 
     # Year formatting
 

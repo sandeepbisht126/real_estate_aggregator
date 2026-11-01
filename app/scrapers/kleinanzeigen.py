@@ -16,6 +16,14 @@ INVESTMENT_KEYWORDS = [
     "vermietete wohnung"
 ]
 
+# Floor types to exclude
+EXCLUDED_FLOOR_TYPES = [
+    "erdgeschoss",
+    "dachgeschoss",
+    "souterrain",
+    "keller"
+]
+
 
 class KleinanzeigenScraper:
     BASE_URL = "https://www.kleinanzeigen.de"
@@ -27,6 +35,15 @@ class KleinanzeigenScraper:
         return any(
             keyword in text
             for keyword in INVESTMENT_KEYWORDS
+        )
+    
+    def is_excluded_floor(self, text, title):
+        """Check if property is on excluded floor (ground floor, attic, etc.)"""
+        text = text.lower() + title.lower()
+        
+        return any(
+            floor_type in text
+            for floor_type in EXCLUDED_FLOOR_TYPES
         )
 
     def normalize_property_type(self, property_type):
@@ -75,9 +92,18 @@ class KleinanzeigenScraper:
 
         return property_type
 
-    async def search(self, filters, max_pages):
+    async def search(self, filters, max_pages, max_results=None, fast_mode=False, progress_callback=None):
 
         all_results = []
+        
+        if max_results is None:
+            max_results = 9999  # No limit if not specified
+        
+        import time
+        start_time = time.time()
+        
+        if progress_callback:
+            progress_callback(0, f"Starting scrape for {max_results} properties...")
 
         async with async_playwright() as p:
 
@@ -138,6 +164,23 @@ class KleinanzeigenScraper:
                 )
 
                 print(f"\nOpening: {url}")
+                
+                if progress_callback:
+                    elapsed = time.time() - start_time
+                    if elapsed > 5:  # Only show estimate after 5 seconds
+                        # Estimate based on current progress
+                        current_progress = 0.1 + (page_num / max_pages) * 0.2
+                        estimated_total = elapsed / current_progress if current_progress > 0 else 0
+                        remaining = estimated_total - elapsed
+                        progress_callback(
+                            current_progress,
+                            f"Scanning page {page_num}/{max_pages}... (ETA: {int(remaining)}s)"
+                        )
+                    else:
+                        progress_callback(
+                            0.1 + (page_num / max_pages) * 0.2,
+                            f"Scanning page {page_num}/{max_pages}..."
+                        )
 
                 try:
 
@@ -147,9 +190,8 @@ class KleinanzeigenScraper:
                         timeout=120000
                     )
 
-                    await asyncio.sleep(
-                        random.uniform(4, 7)
-                    )
+                    delay = random.uniform(2, 4) if fast_mode else random.uniform(4, 7)
+                    await asyncio.sleep(delay)
 
                     # Accept cookies
 
@@ -237,6 +279,22 @@ class KleinanzeigenScraper:
                     print(
                         f"Found {len(ads)} ads on page {page_num}"
                     )
+                    
+                    if progress_callback:
+                        elapsed = time.time() - start_time
+                        if elapsed > 5:
+                            current_progress = 0.3 + (page_num / max_pages) * 0.1
+                            estimated_total = elapsed / current_progress if current_progress > 0 else 0
+                            remaining = estimated_total - elapsed
+                            progress_callback(
+                                current_progress,
+                                f"Found {len(ads)} listings on page {page_num} (ETA: {int(remaining)}s)"
+                            )
+                        else:
+                            progress_callback(
+                                0.3 + (page_num / max_pages) * 0.1,
+                                f"Found {len(ads)} listings on page {page_num}"
+                            )
 
                     if len(ads) == 0:
 
@@ -300,35 +358,59 @@ class KleinanzeigenScraper:
 
                     # Sequential listing parsing
 
-                    for link in links:
+                    for idx, link in enumerate(links):
+
+                        # Stop if we have enough results
+                        if len(all_results) >= max_results:
+                            print(f"Reached max results ({max_results})")
+                            break
 
                         try:
+                            if progress_callback:
+                                elapsed = time.time() - start_time
+                                current_progress = 0.4 + (len(all_results) / max_results) * 0.5
+                                if elapsed > 5:
+                                    estimated_total = elapsed / current_progress if current_progress > 0 else 0
+                                    remaining = estimated_total - elapsed
+                                    progress_callback(
+                                        current_progress,
+                                        f"Parsing listing {idx + 1}/{len(links)} ({len(all_results)}/{max_results} collected) (ETA: {int(remaining)}s)"
+                                    )
+                                else:
+                                    progress_callback(
+                                        current_progress,
+                                        f"Parsing listing {idx + 1}/{len(links)} ({len(all_results)}/{max_results} collected)"
+                                    )
 
                             result = await self.parse_listing(
                                 page,
-                                link
+                                link,
+                                fast_mode=fast_mode
                             )
 
                             if result:
                                 all_results.append(
                                     result
                                 )
+                                print(f"Collected {len(all_results)}/{max_results} properties")
 
-                            await asyncio.sleep(
-                                random.uniform(4, 8)
-                            )
+                            delay = random.uniform(2, 4) if fast_mode else random.uniform(4, 8)
+                            await asyncio.sleep(delay)
 
                         except Exception as e:
 
                             print(
                                 f"Failed listing {link}: {e}"
                             )
+                    
+                    # Stop if we have enough results
+                    if len(all_results) >= max_results:
+                        print(f"Reached max results ({max_results}), stopping")
+                        break
 
                     # Delay between pages
-
-                    await asyncio.sleep(
-                        random.uniform(10, 20)
-                    )
+                    page_delay = random.uniform(5, 10) if fast_mode else random.uniform(10, 20)
+                    await asyncio.sleep(page_delay)
 
                 except Exception as e:
 
@@ -338,12 +420,20 @@ class KleinanzeigenScraper:
 
             await browser.close()
 
+        if progress_callback:
+            elapsed = time.time() - start_time
+            minutes = int(elapsed // 60)
+            seconds = int(elapsed % 60)
+            time_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+            progress_callback(1.0, f"✅ Completed! Found {len(all_results)} properties in {time_str}")
+        
         return all_results
 
     async def parse_listing(
             self,
             page,
-            url
+            url,
+            fast_mode=False
     ):
 
         try:
@@ -354,18 +444,16 @@ class KleinanzeigenScraper:
                 timeout=120000
             )
 
-            await asyncio.sleep(
-                random.uniform(3, 6)
-            )
+            delay = random.uniform(1, 3) if fast_mode else random.uniform(3, 6)
+            await asyncio.sleep(delay)
 
             await page.mouse.wheel(
                 0,
-                random.randint(1000, 2500)
+                random.randint(500, 1500) if fast_mode else random.randint(1000, 2500)
             )
 
-            await asyncio.sleep(
-                random.uniform(2, 5)
-            )
+            delay = random.uniform(1, 3) if fast_mode else random.uniform(2, 5)
+            await asyncio.sleep(delay)
 
             html = await page.content()
 
@@ -394,6 +482,12 @@ class KleinanzeigenScraper:
             )
 
             if self.is_investment_property(text, title):
+                print(f"Skipping investment property: {title}")
+                return None
+            
+            # Check for excluded floor types
+            if self.is_excluded_floor(text, title):
+                print(f"Skipping excluded floor type: {title}")
                 return None
 
             # DETAILS
@@ -759,14 +853,21 @@ class KleinanzeigenScraper:
     ):
 
         berlin_areas = [
-
             "Berlin",
             "Mitte",
             "Prenzlauer Berg",
             "Charlottenburg",
             "Kreuzberg",
-            "Neukölln",
-            "Adlershof"
+            "Adlershof",
+            "Pankow",
+            "Steglitz",
+            "Tempelhof",
+            "Köpenick",
+            "Lichtenberg",
+            "Reinickendorf",
+            "Neu-Hohenschönhausen",
+            "Alt-Hohenschönhausen",
+            "Hohenschönhausen",
         ]
 
         for area in berlin_areas:

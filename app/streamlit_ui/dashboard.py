@@ -223,10 +223,38 @@ with st.sidebar.form("filters_form"):
         unsafe_allow_html=True
     )
 
-    area = st.text_input(
+    # Berlin areas for multiselect
+    berlin_areas = [
+        "ALL",
+        "Berlin",
+        "Mitte",
+        "Prenzlauer Berg",
+        "Charlottenburg",
+        "Kreuzberg",
+        "Neukölln",
+        "Adlershof",
+        "Pankow",
+        "Steglitz",
+        "Tempelhof",
+        "Köpenick",
+        "Lichtenberg",
+        "Reinickendorf",
+        "Neu-Hohenschönhausen",
+        "Alt-Hohenschönhausen",
+        "Hohenschönhausen"
+    ]
+    
+    selected_areas = st.multiselect(
         "Area",
-        value="Berlin"
+        options=berlin_areas,
+        default=["ALL"]
     )
+    
+    # Convert to single area string for filtering
+    if "ALL" in selected_areas or not selected_areas:
+        area = ""
+    else:
+        area = selected_areas[0] if len(selected_areas) == 1 else ",".join(selected_areas)
 
     min_price = st.number_input(
         "Min Price (€)",
@@ -307,6 +335,12 @@ with st.sidebar.form("filters_form"):
         value=False,
         help="Scrape latest 10 properties directly without database"
     )
+    
+    force_refresh = st.checkbox(
+        "🔄 Force Refresh (Ignore Cache)",
+        value=False,
+        help="Re-scrape even if cache is available"
+    )
 
     apply_filters = st.form_submit_button(
         "🚀 Apply Filters",
@@ -345,8 +379,10 @@ if apply_filters:
                         'min_rooms': min_rooms,
                         'max_rooms': max_rooms,
                         'min_space': min_space,
-                        'max_space': max_space
-                    }
+                        'max_space': max_space,
+                        'area': area
+                    },
+                    use_cache=not force_refresh
                 )
             )
             
@@ -356,9 +392,12 @@ if apply_filters:
             
             if properties:
                 df = pd.DataFrame(properties)
-                st.success(f"✅ Scraped {len(df)} latest properties!")
+                if force_refresh:
+                    st.success(f"✅ Scraped {len(df)} latest properties (force refresh)!")
+                else:
+                    st.success(f"✅ Loaded {len(df)} latest properties!")
             else:
-                st.warning("No properties found in fast scrape.")
+                st.warning("No properties found.")
                 df = pd.DataFrame()
         except Exception as e:
             progress_bar.empty()
@@ -460,12 +499,20 @@ if apply_filters:
         # Apply additional filters for fast scrape mode
         # (scraper already uses price/rooms/space filters, but we still filter by hausgeld, balcony, area)
         if use_fast_scrape:
-            # Filter by hausgeld
-            df = df[df["hausgeld"].astype(float) <= max_hausgeld]
+            # Filter by hausgeld (handle empty strings safely)
+            df["hausgeld_numeric"] = pd.to_numeric(df["hausgeld"], errors="coerce").fillna(0)
+            df = df[df["hausgeld_numeric"] <= max_hausgeld]
+            df = df.drop(columns=["hausgeld_numeric"])
             
-            # Filter by area
-            if area:
-                df = df[df["area"].astype(str).str.lower().str.contains(area.lower(), na=False)]
+            # Filter by area (handle multiple areas)
+            if area and area != "":
+                if "," in area:
+                    # Multiple areas selected
+                    area_list = [a.strip().lower() for a in area.split(",")]
+                    df = df[df["area"].astype(str).str.lower().apply(lambda x: any(a in x for a in area_list))]
+                else:
+                    # Single area
+                    df = df[df["area"].astype(str).str.lower().str.contains(area.lower(), na=False)]
             
             # Filter by balcony
             if balcony_only:

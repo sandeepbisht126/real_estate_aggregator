@@ -9,42 +9,47 @@ from playwright_stealth import Stealth
 
 INVESTMENT_KEYWORDS = [
     "kapitalanlage",
-    "rendite",
+    "renditeobjekt",
     "anlageobjekt",
-    "investment",
-    "anlegerwohnung",
-    "vermietete wohnung"
+    "anlegerwohnung"
 ]
 
-# Floor types to exclude
-EXCLUDED_FLOOR_TYPES = [
-    "erdgeschoss",
-    "dachgeschoss",
-    "souterrain",
-    "keller"
-]
-
+# Floor types to exclude (more specific patterns)
+# EXCLUDED_FLOOR_TYPES = [
+#     "erdgeschoss",
+#     "dachgeschoss",
+#     "souterrain"
+# ]
+EXCLUDED_FLOOR_TYPES = []
 
 class KleinanzeigenScraper:
     BASE_URL = "https://www.kleinanzeigen.de"
 
     def is_investment_property(self, text, title):
-
-        text = text.lower() + title.lower()
-
-        return any(
-            keyword in text
-            for keyword in INVESTMENT_KEYWORDS
-        )
+        """Check if property is an investment property (more precise matching)"""
+        text = text.lower() + " " + title.lower()
+        
+        # Check for investment keywords with word boundaries
+        for keyword in INVESTMENT_KEYWORDS:
+            # Match as whole word or phrase
+            if f" {keyword} " in text or text.startswith(keyword + " ") or text.endswith(" " + keyword):
+                print(f"[DEBUG] Investment keyword found: '{keyword}'")
+                return True
+        
+        return False
     
     def is_excluded_floor(self, text, title):
-        """Check if property is on excluded floor (ground floor, attic, etc.)"""
-        text = text.lower() + title.lower()
+        """Check if property is on excluded floor (ground floor, attic, etc.) - more precise"""
+        text = text.lower() + " " + title.lower()
         
-        return any(
-            floor_type in text
-            for floor_type in EXCLUDED_FLOOR_TYPES
-        )
+        # Check for floor types with word boundaries
+        for floor_type in EXCLUDED_FLOOR_TYPES:
+            # Match as whole word
+            if f" {floor_type} " in text or text.startswith(floor_type + " ") or text.endswith(" " + floor_type):
+                print(f"[DEBUG] Excluded floor found: '{floor_type}'")
+                return True
+        
+        return False
 
     def normalize_property_type(self, property_type):
 
@@ -277,7 +282,7 @@ class KleinanzeigenScraper:
                             break
 
                     print(
-                        f"Found {len(ads)} ads on page {page_num}"
+                        f"[DEBUG] Found {len(ads)} ads on page {page_num}"
                     )
                     
                     if progress_callback:
@@ -353,7 +358,7 @@ class KleinanzeigenScraper:
                     links = list(set(links))
 
                     print(
-                        f"Extracted {len(links)} links"
+                        f"[DEBUG] Extracted {len(links)} unique links"
                     )
 
                     # Sequential listing parsing
@@ -392,7 +397,9 @@ class KleinanzeigenScraper:
                                 all_results.append(
                                     result
                                 )
-                                print(f"Collected {len(all_results)}/{max_results} properties")
+                                print(f"[DEBUG] Collected {len(all_results)}/{max_results} properties")
+                            else:
+                                print(f"[DEBUG] Listing returned None (filtered out or error)")
 
                             delay = random.uniform(2, 4) if fast_mode else random.uniform(4, 8)
                             await asyncio.sleep(delay)
@@ -400,7 +407,7 @@ class KleinanzeigenScraper:
                         except Exception as e:
 
                             print(
-                                f"Failed listing {link}: {e}"
+                                f"[DEBUG] Failed listing {link}: {e}"
                             )
                     
                     # Stop if we have enough results
@@ -427,6 +434,7 @@ class KleinanzeigenScraper:
             time_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
             progress_callback(1.0, f"✅ Completed! Found {len(all_results)} properties in {time_str}")
         
+        print(f"[DEBUG] Total results after all pages: {len(all_results)}")
         return all_results
 
     async def parse_listing(
@@ -482,13 +490,15 @@ class KleinanzeigenScraper:
             )
 
             if self.is_investment_property(text, title):
-                print(f"Skipping investment property: {title}")
+                print(f"[DEBUG] Skipping investment property: {title}")
                 return None
             
             # Check for excluded floor types
             if self.is_excluded_floor(text, title):
-                print(f"Skipping excluded floor type: {title}")
+                print(f"[DEBUG] Skipping excluded floor type: {title}")
                 return None
+            
+            print(f"[DEBUG] Property passed filters: {title}")
 
             # DETAILS
 
